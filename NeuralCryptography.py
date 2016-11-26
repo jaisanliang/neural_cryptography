@@ -1,15 +1,13 @@
 import tensorflow as tf
 import numpy as np
-from six.moves import cPickle as pickle
-import sys
 import math
-import time
+import matplotlib.pyplot as plt
 
 def main():
 	sess = tf.Session()
 
 	# Hyperparameters
-	BATCH_SIZE = 4096
+	BATCH_SIZE = 512
 	N = 16					# number of bits in message
 	K = 16					# number of bits in shared symmetric key
 	learning_rate = 0.0008
@@ -36,91 +34,73 @@ def main():
 	l5_depth = 1
 	l5_stride = 1
 
-	# Enable dropout and weight decay normalization
-	#dropout_prob = 1.0 # set to < 1.0 to apply dropout, 1.0 to remove
-	#weight_penalty = 0.0 # set to > 0.0 to apply weight penalty, 0.0 to remove
-	# Implement dropout
-	#dropout_keep_prob = tf.placeholder(tf.float32)
-
 	# Alice's network weights/parameters
 	a_l1_weights = tf.Variable(tf.truncated_normal(
-		[N+K, l1_num_hidden], stddev=0.1))
-	a_l1_biases = tf.Variable(tf.zeros([l1_num_hidden]))
+		[N+K, l1_num_hidden], stddev=0.1), name='a_l1_weights')
+	a_l1_biases = tf.Variable(tf.zeros([l1_num_hidden]), name='a_l1_biases')
 
 	a_l2_weights = tf.Variable(tf.truncated_normal(
-		[l2_filter_size, l1_depth, l2_depth], stddev=0.1))
-	a_l2_biases = tf.Variable(tf.constant(1.0, shape=[l2_depth]))
-	a_l2_feat_map_size = int(math.ceil(float(l1_num_hidden) / l2_stride))
+		[l2_filter_size, l1_depth, l2_depth], stddev=0.1), name='a_l2_weights')
+	a_l2_biases = tf.Variable(tf.constant(1.0, shape=[l2_depth]), name='a_l2_biases')
 
 	a_l3_weights = tf.Variable(tf.truncated_normal(
-		[l3_filter_size, l2_depth, l3_depth], stddev=0.1))
-	a_l3_biases = tf.Variable(tf.constant(1.0, shape=[l3_depth]))
-	a_l3_feat_map_size = int(math.ceil(float(a_l2_feat_map_size) / l3_stride))
+		[l3_filter_size, l2_depth, l3_depth], stddev=0.1), name='a_l3_weights')
+	a_l3_biases = tf.Variable(tf.constant(1.0, shape=[l3_depth]), name='a_l3_biases')
 
 	a_l4_weights = tf.Variable(tf.truncated_normal(
-		[l4_filter_size, l3_depth, l4_depth], stddev=0.1))
-	a_l4_biases = tf.Variable(tf.constant(1.0, shape=[l4_depth]))
-	a_l4_feat_map_size = int(math.ceil(float(a_l3_feat_map_size) / l4_stride))
+		[l4_filter_size, l3_depth, l4_depth], stddev=0.1), name='a_l4_weights')
+	a_l4_biases = tf.Variable(tf.constant(1.0, shape=[l4_depth]), name='a_l4_biases')
 
 	a_l5_weights = tf.Variable(tf.truncated_normal(
-		[l5_filter_size, l4_depth, l5_depth], stddev=0.1))
-	a_l5_biases = tf.Variable(tf.constant(1.0, shape=[l5_depth]))
-	a_l5_feat_map_size = int(math.ceil(float(a_l4_feat_map_size) / l5_stride))
+		[l5_filter_size, l4_depth, l5_depth], stddev=0.1), name='a_l5_weights')
+	a_l5_biases = tf.Variable(tf.constant(1.0, shape=[l5_depth]), name='a_l5_biases')
 
 	# Bob's network weights/parameters
 	b_l1_weights = tf.Variable(tf.truncated_normal(
-		[N+K, l1_num_hidden], stddev=0.1))
-	b_l1_biases = tf.Variable(tf.zeros([l1_num_hidden]))
+		[N+K, l1_num_hidden], stddev=0.1), name='b_l1_weights')
+	b_l1_biases = tf.Variable(tf.zeros([l1_num_hidden]), name='b_l1_biases')
 
 	b_l2_weights = tf.Variable(tf.truncated_normal(
-		[l2_filter_size, l1_depth, l2_depth], stddev=0.1))
-	b_l2_biases = tf.Variable(tf.constant(1.0, shape=[l2_depth]))
-	b_l2_feat_map_size = int(math.ceil(float(l1_num_hidden) / l2_stride))
+		[l2_filter_size, l1_depth, l2_depth], stddev=0.1), name='b_l2_weights')
+	b_l2_biases = tf.Variable(tf.constant(1.0, shape=[l2_depth]), name='b_l2_biases')
 
 	b_l3_weights = tf.Variable(tf.truncated_normal(
-		[l3_filter_size, l2_depth, l3_depth], stddev=0.1))
-	b_l3_biases = tf.Variable(tf.constant(1.0, shape=[l3_depth]))
-	b_l3_feat_map_size = int(math.ceil(float(b_l2_feat_map_size) / l3_stride))
+		[l3_filter_size, l2_depth, l3_depth], stddev=0.1), name='b_l3_weights')
+	b_l3_biases = tf.Variable(tf.constant(1.0, shape=[l3_depth]), name='b_l3_biases')
 
 	b_l4_weights = tf.Variable(tf.truncated_normal(
-		[l4_filter_size, l3_depth, l4_depth], stddev=0.1))
-	b_l4_biases = tf.Variable(tf.constant(1.0, shape=[l4_depth]))
-	b_l4_feat_map_size = int(math.ceil(float(b_l3_feat_map_size) / l4_stride))
+		[l4_filter_size, l3_depth, l4_depth], stddev=0.1), name='b_l4_weights')
+	b_l4_biases = tf.Variable(tf.constant(1.0, shape=[l4_depth]), name='b_l4_biases')
 
 	b_l5_weights = tf.Variable(tf.truncated_normal(
-		[l5_filter_size, l4_depth, l5_depth], stddev=0.1))
-	b_l5_biases = tf.Variable(tf.constant(1.0, shape=[l5_depth]))
-	b_l5_feat_map_size = int(math.ceil(float(b_l4_feat_map_size) / l5_stride))
+		[l5_filter_size, l4_depth, l5_depth], stddev=0.1), name='b_l5_weights')
+	b_l5_biases = tf.Variable(tf.constant(1.0, shape=[l5_depth]), name='b_l5_weights')
 
 	# Eve's network weights/parameters
 	e_l1_weights = tf.Variable(tf.truncated_normal(
-		[N, l1_num_hidden], stddev=0.1))
-	e_l1_biases = tf.Variable(tf.zeros([l1_num_hidden]))
+		[N, l1_num_hidden], stddev=0.1), name='e_l1_weights')
+	e_l1_biases = tf.Variable(tf.zeros([l1_num_hidden]), name='e_l1_biases')
 
 	e_l2_weights = tf.Variable(tf.truncated_normal(
-		[l2_filter_size, l1_depth, l2_depth], stddev=0.1))
-	e_l2_biases = tf.Variable(tf.constant(1.0, shape=[l2_depth]))
-	e_l2_feat_map_size = int(math.ceil(float(l1_num_hidden) / l2_stride))
+		[l2_filter_size, l1_depth, l2_depth], stddev=0.1), name='e_l2_weights')
+	e_l2_biases = tf.Variable(tf.constant(1.0, shape=[l2_depth]), name='e_l2_biases')
 
 	e_l3_weights = tf.Variable(tf.truncated_normal(
-		[l3_filter_size, l2_depth, l3_depth], stddev=0.1))
-	e_l3_biases = tf.Variable(tf.constant(1.0, shape=[l3_depth]))
-	e_l3_feat_map_size = int(math.ceil(float(e_l2_feat_map_size) / l3_stride))
+		[l3_filter_size, l2_depth, l3_depth], stddev=0.1), name='e_l3_weights')
+	e_l3_biases = tf.Variable(tf.constant(1.0, shape=[l3_depth]), name='e_l3_biases')
 
 	e_l4_weights = tf.Variable(tf.truncated_normal(
-		[l4_filter_size, l3_depth, l4_depth], stddev=0.1))
-	e_l4_biases = tf.Variable(tf.constant(1.0, shape=[l4_depth]))
-	e_l4_feat_map_size = int(math.ceil(float(e_l3_feat_map_size) / l4_stride))
+		[l4_filter_size, l3_depth, l4_depth], stddev=0.1), name='e_l4_weights')
+	e_l4_biases = tf.Variable(tf.constant(1.0, shape=[l4_depth]), name='e_l4_biases')
 
 	e_l5_weights = tf.Variable(tf.truncated_normal(
-		[l5_filter_size, l4_depth, l5_depth], stddev=0.1))
-	e_l5_biases = tf.Variable(tf.constant(1.0, shape=[l5_depth]))
-	e_l5_feat_map_size = int(math.ceil(float(e_l4_feat_map_size) / l5_stride))
+		[l5_filter_size, l4_depth, l5_depth], stddev=0.1), name='e_l5_weights')
+	e_l5_biases = tf.Variable(tf.constant(1.0, shape=[l5_depth]), name='e_l5_biases')
 
 	def model(train = False):
 		# Alice's layers
 		concat = tf.concat(1,[train_key_node,train_message_node])
-		a1 = tf.nn.relu(tf.matmul(concat,a_l1_weights) + a_l1_biases)
+		a1 = tf.nn.sigmoid(tf.matmul(concat,a_l1_weights) + a_l1_biases)
 		shape = a1.get_shape().as_list()
 		a1 = tf.reshape(a1, [shape[0], shape[1], 1])
 
@@ -134,13 +114,13 @@ def main():
 		a4 = tf.nn.sigmoid(a4 + a_l4_biases)
 
 		a5 = tf.nn.conv1d(a4, a_l5_weights, l5_stride, padding='SAME')
-		a5 = tf.nn.sigmoid(a5 + a_l5_biases)
+		a5 = tf.nn.tanh(a5 + a_l5_biases)
 		shape = a5.get_shape().as_list()
 		a5 = tf.reshape(a5, [shape[0], shape[1]])
 		
 		# Bob's layers
 		concat = tf.concat(1,[train_key_node,a5])
-		b1 = tf.nn.relu(tf.matmul(concat,b_l1_weights) + b_l1_biases)
+		b1 = tf.nn.sigmoid(tf.matmul(concat,b_l1_weights) + b_l1_biases)
 		shape = b1.get_shape().as_list()
 		b1 = tf.reshape(b1, [shape[0], shape[1], 1])
 
@@ -154,12 +134,12 @@ def main():
 		b4 = tf.nn.sigmoid(b4 + b_l4_biases)
 
 		b5 = tf.nn.conv1d(b4, b_l5_weights, l5_stride, padding='SAME')
-		b5 = tf.nn.sigmoid(b5 + b_l5_biases)
+		b5 = tf.nn.tanh(b5 + b_l5_biases)
 		shape = b5.get_shape().as_list()
 		b5 = tf.reshape(b5, [shape[0], shape[1]])
 		
 		# Eve's layers
-		e1 = tf.nn.relu(tf.matmul(a5,e_l1_weights) + e_l1_biases)
+		e1 = tf.nn.sigmoid(tf.matmul(a5,e_l1_weights) + e_l1_biases)
 		shape = e1.get_shape().as_list()
 		e1 = tf.reshape(e1, [shape[0], shape[1], 1])
 
@@ -173,63 +153,50 @@ def main():
 		e4 = tf.nn.sigmoid(e4 + e_l4_biases)
 
 		e5 = tf.nn.conv1d(e4, e_l5_weights, l5_stride, padding='SAME')
-		e5 = tf.nn.sigmoid(e5 + e_l5_biases)
+		e5 = tf.nn.tanh(e5 + e_l5_biases)
 		shape = e5.get_shape().as_list()
 		e5 = tf.reshape(e5, [shape[0], shape[1]])
 		return b5, e5
 
 	# Training computation
 	bob_decode, eve_decode = model()
-	loss = tf.reduce_mean(tf.abs(bob_decode-train_message_node)
-		+tf.square((N/2.0-tf.abs(eve_decode-train_message_node))/(N/2.0))
-					+tf.abs(eve_decode-train_message_node))
+	ab_loss = tf.reduce_mean(tf.abs(bob_decode-train_message_node))+tf.square(1-tf.abs(eve_decode-train_message_node))
+	b_loss = tf.reduce_mean(tf.abs(bob_decode-train_message_node))
+	e_loss = tf.reduce_mean(tf.abs(eve_decode-train_message_node))
+
+	optimizer = tf.train.AdamOptimizer(learning_rate)
+
+	all_vars = tf.trainable_variables()
+	ab_vars = [v for v in all_vars if (v.name[0] == 'a' or v.name[0] == 'b')]
+	e_vars = [v for v in all_vars if v.name[0] == 'e']
+
+	# Per step, train Alice and Bob for one batch, then train Eve for two batches
+	ab_train = optimizer.minimize(ab_loss, var_list=ab_vars)
+	e_train = optimizer.minimize(e_loss, var_list=e_vars)
+
+	num_training_steps=20000
 	
-	# Add weight decay penalty
-	# loss = loss + weight_decay_penalty([layer3_weights, layer4_weights], weight_penalty)
-	optimizer = tf.train.AdamOptimizer(learning_rate).minimize(loss)
-	'''
-	# Predictions for the training, validation, and test data.
-	batch_prediction = tf.nn.softmax(logits)
-	valid_prediction = tf.nn.softmax(network_model(tf_valid_dataset))
-	test_prediction = tf.nn.softmax(network_model(tf_test_dataset))
-	train_prediction = tf.nn.softmax(network_model(tf_train_dataset))
+	init = tf.initialize_all_variables()
+	sess.run(init)
 
-	def train_model(num_steps=num_training_steps):
-		Train the model with minibatches in a tensorflow session
-		with tf.Session(graph=self.graph) as session:
-			tf.initialize_all_variables().run()
-			print 'Initializing variables...'
-			
-			for step in range(num_steps):
-				offset = (step * batch_size) % (self.train_Y.shape[0] - batch_size)
-				batch_data = self.train_X[offset:(offset + batch_size), :, :, :]
-				batch_labels = self.train_Y[offset:(offset + batch_size), :]
-				
-				# Data to feed into the placeholder variables in the tensorflow graph
-				feed_dict = {tf_train_batch : batch_data, tf_train_labels : batch_labels, 
-							 dropout_keep_prob: dropout_prob}
-				_, l, predictions = session.run(
-				  [optimizer, loss, batch_prediction], feed_dict=feed_dict)
-				if (step % 100 == 0):
-					train_preds = session.run(train_prediction, feed_dict={tf_train_dataset: self.train_X,
-																   dropout_keep_prob : 1.0})
-					val_preds = session.run(valid_prediction, feed_dict={dropout_keep_prob : 1.0})
-					print ''
-					print('Batch loss at step %d: %f' % (step, l))
-					print('Batch training accuracy: %.1f%%' % accuracy(predictions, batch_labels))
-					print('Validation accuracy: %.1f%%' % accuracy(val_preds, self.val_Y))
-					print('Full train accuracy: %.1f%%' % accuracy(train_preds, self.train_Y))
-	
-	# save train model function so it can be called later
-	self.train_model = train_model
+	b_losses = [0 for i in range(num_training_steps/100)]
+	e_losses = [0 for i in range(num_training_steps/100)]
 
-def weight_decay_penalty(weights, penalty):
-	return penalty * sum([tf.nn.l2_loss(w) for w in weights])
+	for step in xrange(num_training_steps):
+		# Randomly initialize keys and messages
+		messages = np.random.randint(2,size=(BATCH_SIZE, N))*2-1
+		keys = np.random.randint(2,size=(BATCH_SIZE, K))*2-1
+		feed_dict = {train_key_node: keys,
+					 train_message_node: messages}
+		_,loss_b,_,_,loss_e = sess.run([ab_train,b_loss,e_train,e_train,e_loss], feed_dict=feed_dict)
+		if step % 100 == 0:
+			b_losses[step/100] = loss_b
+			e_losses[step/100] = loss_e
 
-def accuracy(predictions, labels):
-  return (100.0 * np.sum(np.argmax(predictions, 1) == np.argmax(labels, 1))
-          / predictions.shape[0])
-'''
+	plt.plot(range(num_training_steps/100),b_losses,'-r',range(num_training_steps/100),e_losses,'-b')
+	plt.show()
+
+	# 20 minutes for 10000 iterations
 
 if __name__ == '__main__':
 	main()
