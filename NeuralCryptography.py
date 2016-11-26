@@ -100,18 +100,18 @@ def main():
 	def model(train = False):
 		# Alice's layers
 		concat = tf.concat(1,[train_key_node,train_message_node])
-		a1 = tf.nn.sigmoid(tf.matmul(concat,a_l1_weights) + a_l1_biases)
+		a1 = tf.nn.relu(tf.matmul(concat,a_l1_weights) + a_l1_biases)
 		shape = a1.get_shape().as_list()
 		a1 = tf.reshape(a1, [shape[0], shape[1], 1])
 
 		a2 = tf.nn.conv1d(a1, a_l2_weights, l2_stride, padding='SAME')
-		a2 = tf.nn.sigmoid(a2 + a_l2_biases)
+		a2 = tf.nn.relu(a2 + a_l2_biases)
 
 		a3 = tf.nn.conv1d(a2, a_l3_weights, l3_stride, padding='SAME')
-		a3 = tf.nn.sigmoid(a3 + a_l3_biases)
+		a3 = tf.nn.relu(a3 + a_l3_biases)
 
 		a4 = tf.nn.conv1d(a3, a_l4_weights, l4_stride, padding='SAME')
-		a4 = tf.nn.sigmoid(a4 + a_l4_biases)
+		a4 = tf.nn.relu(a4 + a_l4_biases)
 
 		a5 = tf.nn.conv1d(a4, a_l5_weights, l5_stride, padding='SAME')
 		a5 = tf.nn.tanh(a5 + a_l5_biases)
@@ -120,18 +120,18 @@ def main():
 		
 		# Bob's layers
 		concat = tf.concat(1,[train_key_node,a5])
-		b1 = tf.nn.sigmoid(tf.matmul(concat,b_l1_weights) + b_l1_biases)
+		b1 = tf.nn.relu(tf.matmul(concat,b_l1_weights) + b_l1_biases)
 		shape = b1.get_shape().as_list()
 		b1 = tf.reshape(b1, [shape[0], shape[1], 1])
 
 		b2 = tf.nn.conv1d(b1, b_l2_weights, l2_stride, padding='SAME')
-		b2 = tf.nn.sigmoid(b2 + b_l2_biases)
+		b2 = tf.nn.relu(b2 + b_l2_biases)
 
 		b3 = tf.nn.conv1d(b2, b_l3_weights, l3_stride, padding='SAME')
-		b3 = tf.nn.sigmoid(b3 + b_l3_biases)
+		b3 = tf.nn.relu(b3 + b_l3_biases)
 
 		b4 = tf.nn.conv1d(b3, b_l4_weights, l4_stride, padding='SAME')
-		b4 = tf.nn.sigmoid(b4 + b_l4_biases)
+		b4 = tf.nn.relu(b4 + b_l4_biases)
 
 		b5 = tf.nn.conv1d(b4, b_l5_weights, l5_stride, padding='SAME')
 		b5 = tf.nn.tanh(b5 + b_l5_biases)
@@ -139,18 +139,18 @@ def main():
 		b5 = tf.reshape(b5, [shape[0], shape[1]])
 		
 		# Eve's layers
-		e1 = tf.nn.sigmoid(tf.matmul(a5,e_l1_weights) + e_l1_biases)
+		e1 = tf.nn.relu(tf.matmul(a5,e_l1_weights) + e_l1_biases)
 		shape = e1.get_shape().as_list()
 		e1 = tf.reshape(e1, [shape[0], shape[1], 1])
 
 		e2 = tf.nn.conv1d(e1, e_l2_weights, l2_stride, padding='SAME')
-		e2 = tf.nn.sigmoid(e2 + e_l2_biases)
+		e2 = tf.nn.relu(e2 + e_l2_biases)
 
 		e3 = tf.nn.conv1d(e2, e_l3_weights, l3_stride, padding='SAME')
-		e3 = tf.nn.sigmoid(e3 + e_l3_biases)
+		e3 = tf.nn.relu(e3 + e_l3_biases)
 
 		e4 = tf.nn.conv1d(e3, e_l4_weights, l4_stride, padding='SAME')
-		e4 = tf.nn.sigmoid(e4 + e_l4_biases)
+		e4 = tf.nn.relu(e4 + e_l4_biases)
 
 		e5 = tf.nn.conv1d(e4, e_l5_weights, l5_stride, padding='SAME')
 		e5 = tf.nn.tanh(e5 + e_l5_biases)
@@ -160,7 +160,7 @@ def main():
 
 	# Training computation
 	bob_decode, eve_decode = model()
-	ab_loss = tf.reduce_mean(tf.abs(bob_decode-train_message_node))+tf.square(1-tf.abs(eve_decode-train_message_node))
+	ab_loss = tf.reduce_mean(tf.abs(bob_decode-train_message_node))+(1-tf.abs(eve_decode-train_message_node))**2
 	b_loss = tf.reduce_mean(tf.abs(bob_decode-train_message_node))
 	e_loss = tf.reduce_mean(tf.abs(eve_decode-train_message_node))
 
@@ -188,10 +188,14 @@ def main():
 		keys = np.random.randint(2,size=(BATCH_SIZE, K))*2-1
 		feed_dict = {train_key_node: keys,
 					 train_message_node: messages}
-		_,loss_b,_,_,loss_e = sess.run([ab_train,b_loss,e_train,e_train,e_loss], feed_dict=feed_dict)
-		if step % 100 == 0:
-			b_losses[step/100] = loss_b
-			e_losses[step/100] = loss_e
+		if step % 2 == 0:
+			_,loss_b = sess.run([ab_train,b_loss], feed_dict=feed_dict)
+			if step % 100 == 0:
+				b_losses[step/100] = loss_b
+		else:
+			_,_,loss_e = sess.run([e_train,e_train,e_loss], feed_dict=feed_dict)
+			if step % 100 == 1:
+				e_losses[step/100] = loss_e
 
 	plt.plot(range(num_training_steps/100),b_losses,'-r',range(num_training_steps/100),e_losses,'-b')
 	plt.show()
